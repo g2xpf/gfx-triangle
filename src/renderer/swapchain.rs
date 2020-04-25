@@ -25,8 +25,9 @@ impl<'a, B: Backend> Swapchain<'a, B> {
                 .copied()
                 .unwrap_or(formats[0])
         });
-        let swap_config = window::SwapchainConfig::from_caps(&caps, format, dims);
-        let extent = swap_config.extent;
+        let mut swap_config = window::SwapchainConfig::from_caps(&caps, format, dims);
+        swap_config.present_mode = window::PresentMode::FIFO;
+        let extent = swap_config.extent.to_extent();
 
         let viewport = pso::Viewport {
             rect: pso::Rect {

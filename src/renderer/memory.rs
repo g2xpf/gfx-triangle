@@ -8,21 +8,23 @@ use super::buffer::Buffer;
 pub struct Memory<'a, B: Backend, T> {
     pub buffer: ManuallyDrop<Buffer<'a, B, T>>,
     memory: ManuallyDrop<B::Memory>,
+    size: u64,
 }
 
 impl<'a, B: Backend, T> Memory<'a, B, T> {
     pub fn new(mut buffer: Buffer<'a, B, T>, memory_types: &[MemoryType]) -> Self {
-        let memory = Self::allocate_gpu_memory(&mut buffer, memory_types);
+        let (memory, size) = Self::allocate_gpu_memory(&mut buffer, memory_types);
         Memory {
             buffer: ManuallyDrop::new(buffer),
             memory,
+            size,
         }
     }
 
     pub fn allocate_gpu_memory(
         buffer: &mut Buffer<'a, B, T>,
         memory_types: &[MemoryType],
-    ) -> ManuallyDrop<B::Memory> {
+    ) -> (ManuallyDrop<B::Memory>, u64) {
         let device = &buffer.device;
         unsafe {
             let buffer_req = device.get_buffer_requirements(&buffer.buf);
@@ -43,7 +45,7 @@ impl<'a, B: Backend, T> Memory<'a, B, T> {
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
             device.unmap_memory(&memory);
-            ManuallyDrop::new(memory)
+            (ManuallyDrop::new(memory), buffer_req.size)
         }
     }
 
@@ -53,10 +55,36 @@ impl<'a, B: Backend, T> Memory<'a, B, T> {
             .enumerate()
             .position(|(id, mem_type)| {
                 buffer_req.type_mask & (1 << id) != 0
-                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
+                    && mem_type
+                        .properties
+                        .contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
             })
             .unwrap()
             .into()
+    }
+
+    pub fn update_data(&mut self, offset: u64)
+    where
+        T: Copy,
+    {
+        let device = &self.buffer.device;
+
+        let upload_size = self.buffer.memory_size();
+
+        assert!(offset + upload_size as u64 <= self.size);
+        let memory = &self.memory;
+
+        unsafe {
+            let mapping = device
+                .map_memory(memory, m::Segment { offset, size: None })
+                .unwrap();
+            ptr::copy_nonoverlapping(
+                self.buffer.content.as_ptr() as *const u8,
+                mapping,
+                upload_size as usize,
+            );
+            device.unmap_memory(memory);
+        }
     }
 }
 

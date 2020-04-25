@@ -21,9 +21,11 @@ const DIMS: window::Extent2D = window::Extent2D {
 
 fn main() {
     env_logger::init();
+    #[cfg(debug_assersion)]
+    let mut fps_counter = fps_counter::FPSCounter::new();
     let event_loop = winit::event_loop::EventLoop::new();
     let wb = winit::window::WindowBuilder::new()
-        .with_title("triangle example")
+        .with_title("triangle")
         .with_inner_size(winit::dpi::Size::Physical(winit::dpi::PhysicalSize::new(
             DIMS.width,
             DIMS.height,
@@ -34,8 +36,10 @@ fn main() {
     let window = wb.build(&event_loop).expect("failed to create window");
 
     let window_should_closed = Arc::new(AtomicBool::new(false));
+    let resized = Arc::new(AtomicBool::new(false));
 
     let window_should_closed_mutex = Arc::clone(&window_should_closed);
+    let resized_cloned = Arc::clone(&resized);
     let handler = thread::spawn(move || {
         let instance = back::Instance::create("gfx-rs triangle", 1)
             .expect("failed to create an instance of gfx");
@@ -66,10 +70,18 @@ fn main() {
         let device = gpu.device;
 
         {
-            let mut renderer =
-                Renderer::new(&mut surface, &adapter, &device, queue_group.family, DIMS);
+            let mut renderer = Renderer::new(
+                &mut surface,
+                &adapter,
+                &device,
+                queue_group.family,
+                DIMS,
+                resized_cloned,
+            );
 
             while !window_should_closed_mutex.load(Ordering::Relaxed) {
+                #[cfg(debug_assersion)]
+                println!("frame: {}", fps_counter.tick());
                 renderer.render(queue);
             }
         }
@@ -99,6 +111,9 @@ fn main() {
                         handler.join().unwrap();
                     }
                     *control_flow = winit::event_loop::ControlFlow::Exit;
+                }
+                winit::event::WindowEvent::Resized(_) => {
+                    resized.store(true, Ordering::Relaxed);
                 }
                 _ => {}
             }

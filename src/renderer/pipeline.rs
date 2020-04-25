@@ -1,7 +1,6 @@
 use gfx_hal::{format as f, pass::Subpass, prelude::*, pso, Backend};
 use std::fs::read;
 use std::io::Cursor;
-use std::iter;
 use std::mem::{self, ManuallyDrop};
 use std::ptr;
 
@@ -19,16 +18,11 @@ impl<'a, B: Backend> Pipeline<'a, B> {
         vs_path: &str,
         fs_path: &str,
         render_pass: &B::RenderPass,
-        set_layout: &B::DescriptorSetLayout,
+        set_layout: Option<&B::DescriptorSetLayout>,
     ) -> Self {
         let pipeline_layout = ManuallyDrop::new(
-            unsafe {
-                device.create_pipeline_layout(
-                    iter::once(&*set_layout),
-                    &[(pso::ShaderStageFlags::VERTEX, 0..1)],
-                )
-            }
-            .expect("Can't create pipeline layout"),
+            unsafe { device.create_pipeline_layout(set_layout, &[]) }
+                .expect("Can't create pipeline layout"),
         );
 
         let vs_module = Self::load_spirv(device, vs_path);

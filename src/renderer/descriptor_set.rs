@@ -27,15 +27,43 @@ impl<'a, B: Backend> DescriptorSet<'a, B> {
         device: &B::Device,
     ) -> ManuallyDrop<B::DescriptorSetLayout> {
         ManuallyDrop::new(
-            unsafe { device.create_descriptor_set_layout(&[], &[]) }
-                .expect("Can't create descriptor set layout"),
+            unsafe {
+                device.create_descriptor_set_layout(
+                    &[pso::DescriptorSetLayoutBinding {
+                        binding: 0,
+                        ty: pso::DescriptorType::Buffer {
+                            ty: pso::BufferDescriptorType::Uniform,
+                            format: pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: false,
+                            },
+                        },
+                        count: 1,
+                        stage_flags: pso::ShaderStageFlags::VERTEX,
+                        immutable_samplers: false,
+                    }],
+                    &[],
+                )
+            }
+            .expect("Can't create descriptor set layout"),
         )
     }
 
     pub(super) fn create_descriptor_pool(device: &B::Device) -> ManuallyDrop<B::DescriptorPool> {
         ManuallyDrop::new(unsafe {
             device
-                .create_descriptor_pool(1, &[], pso::DescriptorPoolCreateFlags::empty())
+                .create_descriptor_pool(
+                    1,
+                    &[pso::DescriptorRangeDesc {
+                        ty: pso::DescriptorType::Buffer {
+                            ty: pso::BufferDescriptorType::Uniform,
+                            format: pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: false,
+                            },
+                        },
+                        count: 1,
+                    }],
+                    pso::DescriptorPoolCreateFlags::empty(),
+                )
                 .expect("Can't create descriptor pool")
         })
     }
